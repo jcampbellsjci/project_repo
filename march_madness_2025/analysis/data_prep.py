@@ -68,3 +68,35 @@ team_records = (
     .assign(WinRatio = lambda x: x["Wins"] / x["GamesPlayed"])
     .reset_index()
 )
+
+
+# We're now going to summarize statistics from teams for a season
+# We'll start by finding averages of each stat field for a season
+
+# Creating a list of stat fields
+stat_fields = [
+    i for i in raw_game_log.columns if
+    (i.startswith("Team1") or i.startswith("Team2"))
+    and not (i.endswith("TeamID") or i.endswith("Loc"))
+]
+
+# Grouping by team and season and finding averages of stat fields
+stat_avg = (
+    raw_game_log
+    .groupby(["Season", "Team1TeamID"])[stat_fields]
+    .agg("mean")
+    .reset_index()
+)
+
+# For some of these averages, we'll calculate ratios as input features
+stat_avg = (
+    stat_avg
+    .assign(
+        Team1FGP = lambda x: x["Team1FGM"] / x["Team1FGA"],
+        Team1FGP3 = lambda x: x["Team1FGM3"] / x["Team1FGA3"],
+        Team1FTP = lambda x: x["Team1FTM"] / x["Team1FTA"],
+        Team2FGP = lambda x: x["Team2FGM"] / x["Team2FGA"],
+        Team2FGP3 = lambda x: x["Team2FGM3"] / x["Team2FGA3"],
+        Team2FTP = lambda x: x["Team2FTM"] / x["Team2FTA"]
+    )
+)
