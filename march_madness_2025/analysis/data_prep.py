@@ -1,6 +1,7 @@
 import pandas as pd
-import numpy as np
 import os
+import requests
+from bs4 import BeautifulSoup
 
 #### Prep ####
 
@@ -100,3 +101,47 @@ stat_avg = (
         Team2FTP = lambda x: x["Team2FTM"] / x["Team2FTA"]
     )
 )
+
+
+#### Kenpom Data ####
+
+# Kenpom tracks advanced stats that can be a better measure of performance than general heuristic stats
+# https://kenpom.com/
+
+# We'll scrape data and put it into a df to use as model input
+
+# Getting html from url
+url = "https://kenpom.com/index.php?y=2025"
+response = requests.get(url)
+html = response.text
+
+# Parsing html and getting ratings table
+raw_table = BeautifulSoup(html, "html.parser").find("table", {"id": "ratings-table"})
+
+# Getting all table rows from rating table
+rows = raw_table.find_all("tr")
+
+# Looping through rows and getting all table data and headers
+headers = []
+for row in rows[:]:
+    cells = row.find_all(["th"])
+    headers.append([cell.get_text(strip = True) for cell in cells])
+headers = headers[1]
+
+data = []
+for row in rows[:]:
+    cells = row.find_all(["td"])
+    data.append([cell.get_text(strip = True) for cell in cells])
+data = list(filter(None, data))
+
+
+# We'll select specific fields from the header object and data objects
+# The table structure is a bit complex, and does not translate into a df well as is
+kp_finalized = [[headers[i] for i in [1] + list(range(4, 12))]]
+# Now we'll loop through the data, index, and append
+for i in data[:]:
+    kp_finalized.append([i[j] for j in [1, 4, 5, 7, 9, 11, 13, 15, 17]])
+
+
+kenpom_df = pd.DataFrame(kp_finalized[1:], columns = kp_finalized[0])
+
