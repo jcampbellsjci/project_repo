@@ -113,16 +113,30 @@ stat_avg = (
 
 kp_dict = {}
 
-# Note: I've had to break up this loop
-# Guessing there's a limit on how many pages can be scraped over a certain amount of time
-for url_year in range(2002, 2026):
-    # Getting html from url
-    url = "https://kenpom.com/index.php?y=" + str(url_year)
-    response = requests.get(url)
-    html = response.text
+# Looping through years and pulling and cleaning data
+# I've been getting blocked from KP, so I set up a manual html csv we can pull from and clean up
+im_blocked_from_kp = True
 
-    # Parsing html and getting ratings table
-    raw_table = BeautifulSoup(html, "html.parser").find("table", {"id": "ratings-table"})
+for url_year in range(2002, 2026):
+    if im_blocked_from_kp:
+        # Getting kp data from raw data dict
+        raw_string = (
+            raw_data['kp_html']
+            .query("Season == @url_year")
+            
+        )["HTML"].tolist()
+
+        # Formatting string into beautiful soup object
+        raw_table = BeautifulSoup(raw_string[0], "html.parser")
+
+    else:
+        # Getting html from url
+        url = "https://kenpom.com/index.php?y=" + str(url_year)
+        response = requests.get(url)
+        html = response.text
+
+        # Parsing html and getting ratings table
+        raw_table = BeautifulSoup(html, "html.parser").find("table", {"id": "ratings-table"})
 
     # Getting all table rows from rating table
     rows = raw_table.find_all("tr")
@@ -165,7 +179,7 @@ for url_year in range(2002, 2026):
             .assign(
                 **{
                     i: lambda x, col = i: pd.to_numeric(
-                        x[i].str.replace("\\+", "", regex = True
+                        x[col].str.replace("\\+", "", regex = True
                     ))
                     for i in kenpom_df.columns[1:]
                 }
