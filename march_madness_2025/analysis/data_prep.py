@@ -259,3 +259,119 @@ kenpom_final_df = (
     .assign(TeamID = lambda x: x["TeamID"].astype("int"))
     .drop(columns = ["Team", "TeamNameSpelling"])
 )
+
+
+#### Tournament Seeds ####
+
+# Tournament seed data is a bit messy; want to clean up and treat as integer
+tourney_seeds_clean = (
+    raw_data['MNCAATourneySeeds']
+    .assign(Seed = lambda x: pd.to_numeric(x["Seed"].str.replace(r"[A-Za-z]", "", regex = True)))
+)
+
+
+#### Combining and Finding Differences ####
+
+# For every tourney game, we'll need to:
+# 1. Join season summary, seed, and kp data to both teams
+# 2. Find differences between teams
+
+# First, we need to take our NCAA tournament game data and edit it similar to our regular season data
+wtourney_team1_names = [
+   i.replace("W", "Team1") if i.startswith("W")
+   else i.replace("L", "Team2") if i.startswith("L")
+   else i
+   for i in raw_data['MNCAATourneyDetailedResults'].columns
+]
+ltourney_team1_names = [
+   i.replace("W", "Team2") if i.startswith("W")
+   else i.replace("L", "Team1") if i.startswith("L")
+   else i
+   for i in raw_data['MNCAATourneyDetailedResults'].columns
+]
+
+wtourney_team1 = raw_data['MNCAATourneyDetailedResults'].copy()
+ltourney_team1 = raw_data['MNCAATourneyDetailedResults'].copy()
+wtourney_team1.columns = wtourney_team1_names
+ltourney_team1.columns = ltourney_team1_names
+
+# Unlike regular season summaries, we only want one instance of each game
+# It should be random, so outcome will be 50/50 split
+
+# Getting random 50% of winning team
+wtourney_team1_sample = wtourney_team1.sample(frac = .5)
+# We'll remove games from team 2 that are in team 1 sample
+ltourney_team1_sample = (
+    ltourney_team1
+    .merge(
+        wtourney_team1_sample[["Season", "Team2TeamID", "Team1TeamID"]],
+        left_on = ["Season", "Team1TeamID", "Team2TeamID"],
+        right_on = ["Season", "Team2TeamID", "Team1TeamID"],
+        how = "left",
+        suffixes=("", "_b")
+    )
+    .query("Team2TeamID_b.isnull()")
+    .drop(columns = ["Team2TeamID_b", "Team1TeamID_b"])
+)
+
+raw_tourney_game_log = (
+    pd.concat([wtourney_team1_sample, ltourney_team1_sample])
+    .assign(Outcome = lambda x: np.where(x["Team1Score"] > x["Team2Score"], 1, 0))
+    [["Season", "Team1TeamID", "Team2TeamID", "Outcome"]]
+)
+
+# Joining seed info to tourney game log
+final_df = (
+    raw_tourney_game_log
+    .merge(
+         tourney_seeds_clean,
+         left_on = ["Season", "Team1TeamID"],
+         right_on = ["Season", "TeamID"],
+         how = "left"
+    )
+    .drop(columns = ["TeamID"])
+    .merge(
+         tourney_seeds_clean,
+         left_on = ["Season", "Team2TeamID"],
+         right_on = ["Season", "TeamID"],
+         how = "left"
+    )
+    .drop(columns = ["TeamID"])
+    .rename(columns = {"Seed_x": "Team1Seed", "Seed_y": "Team2Seed"})
+)
+
+final_df = (
+    final_df
+    .merge(
+         stat_avg,
+         on = ["Season", "Team1TeamID"],
+         how = "left"
+    )
+)
+final_df.columns = [
+   i.replace("Team1", "TeamA") if i.startswith("Team1")
+   else i.replace("Team2", "TeamB") if i == ("Team2TeamID") or i == ("Team2Seed")
+   else i.replace("Team2", "TeamAOpp") if i.startswith("Team2")
+   else i
+   for i in final_df.columns
+]
+
+final_df = (
+    final_df
+    .merge(
+         stat_avg,
+         left_on = ["Season", "TeamBTeamID"],
+         right_on = ["Season", "Team1TeamID"],
+         how = "left"
+    )
+)
+final_df.columns = [
+   i.replace("Team1", "TeamB") if i.startswith("Team1")
+   else i.replace("Team2", "TeamBOpp") if i.startswith("Team2")
+   else i
+   for i in final_df.columns
+]
+
+final_df.to_csv("data/tourney_games_raw.csv", index = False)
+
+
