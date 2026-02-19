@@ -3,11 +3,23 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import numpy as np
+import sqlalchemy
+
 
 #### Prep ####
 
 # Setting working directory
 os.chdir("/Users/jake/Documents/project_repo/march_madness_2025")
+
+db_url = sqlalchemy.engine.URL.create(
+    drivername = "postgresql+psycopg",
+    username = "jake",
+    password = os.getenv("DB_PASSWORD"),
+    host = "localhost",
+    port = 5432,
+    database = "postgres"
+)
+engine = sqlalchemy.create_engine(db_url)
 
 
 # Loading in data files
@@ -340,6 +352,7 @@ final_df = (
     .rename(columns = {"Seed_x": "Team1Seed", "Seed_y": "Team2Seed"})
 )
 
+# Merging season stats for team 1
 final_df = (
     final_df
     .merge(
@@ -348,6 +361,8 @@ final_df = (
          how = "left"
     )
 )
+# We'll rename team1 to Team A
+# Team 2 from stats df will become Team A Opponent
 final_df.columns = [
    i.replace("Team1", "TeamA") if i.startswith("Team1")
    else i.replace("Team2", "TeamB") if i == ("Team2TeamID") or i == ("Team2Seed")
@@ -356,6 +371,7 @@ final_df.columns = [
    for i in final_df.columns
 ]
 
+# Merging season stats to team 2 (or as it's now known, team b)
 final_df = (
     final_df
     .merge(
@@ -364,7 +380,9 @@ final_df = (
          right_on = ["Season", "Team1TeamID"],
          how = "left"
     )
+    .drop(columns = ["Team1TeamID"])
 )
+# Renaming stat fields to team B
 final_df.columns = [
    i.replace("Team1", "TeamB") if i.startswith("Team1")
    else i.replace("Team2", "TeamBOpp") if i.startswith("Team2")
@@ -372,6 +390,51 @@ final_df.columns = [
    for i in final_df.columns
 ]
 
-final_df.to_csv("data/tourney_games_raw.csv", index = False)
+
+# We'll now take our final DF and put it in a postgres db
+# Going to create a game ID field that combines team ID's and seasons as well as a created at ts
+# Also going to join team name info
+final_df = (
+    final_df
+    .assign(
+        GameID = lambda x: x["Season"].astype("str") + "-" +
+        x["TeamATeamID"].astype("str") + "-" +
+        x["TeamBTeamID"].astype("str")
+    )
+    .assign(CreatedAt = pd.Timestamp.now(tz = "UTC"))
+    .merge(
+        raw_data['MTeams'][["TeamID", "TeamName"]],
+        left_on = "TeamATeamID",
+        right_on = "TeamID",
+        how = "left"
+    )
+    .drop(columns = "TeamID")
+    .rename(columns = {"TeamName":"TeamAName"})
+    .merge(
+        raw_data['MTeams'][["TeamID", "TeamName"]],
+        left_on = "TeamBTeamID",
+        right_on = "TeamID",
+        how = "left"
+    )
+    .drop(columns = "TeamID")
+    .rename(columns = {"TeamName":"TeamBName"})
+)
+# Rearranging fields so game ID and ts are first
+final_df = (
+    final_df[["GameID", "CreatedAt", "Season", "TeamATeamID", "TeamAName", "TeamBTeamID", "TeamBName"] +
+    final_df.columns[3:-4].tolist()]
+)
+
+# Uploding to postgres
+(
+    final_df
+    .to_sql(
+        "ncaa_game_stats_raw",
+        engine,
+        if_exists = "replace",
+        #if_exists = "append",
+        index = False
+    )
+)
 
 
