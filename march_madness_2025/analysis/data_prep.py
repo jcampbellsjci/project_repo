@@ -438,3 +438,65 @@ final_df = (
 )
 
 
+# Taking stats for team A and team b and putting them into long format
+team_a_long = (
+    final_df
+    .melt(
+        id_vars = "GameID",
+        value_vars = ["TeamASeed"] + list(final_df.loc[:, "TeamAScore":"TeamAOppFTP"].columns),
+        var_name = "Variable",
+        value_name = "AValue"
+    )
+    .assign(Variable = lambda x: x["Variable"].str.replace("TeamA", ""))
+)
+
+team_b_long = (
+    final_df
+    .melt(
+        id_vars = "GameID",
+        value_vars = ["TeamBSeed"] + list(final_df.loc[:, "TeamBScore":"TeamBOppFTP"].columns),
+        var_name = "Variable",
+        value_name = "BValue"
+    )
+    .assign(Variable = lambda x: x["Variable"].str.replace("TeamB", ""))
+)
+
+# Joining long df's together and pivoting them wide
+long_diff_df = (
+    team_a_long
+    .merge(
+        team_b_long,
+        on = ["GameID", "Variable"],
+        how = "inner"
+    )
+    .assign(DiffValue = lambda x: x["AValue"] - x["BValue"])
+    .pivot(
+        index = "GameID",
+        columns = "Variable",
+        values = "DiffValue"
+    )
+    .reset_index()
+)
+long_diff_df.columns.name = None
+
+# Joining back to ID columns from final df
+final_diff_df = (
+    final_df.loc[:, "GameID":"Outcome"]
+    .merge(
+        long_diff_df,
+        on = "GameID",
+        how = "inner"
+    )
+)
+
+# Uploding to postgres
+(
+    final_diff_df
+    .to_sql(
+        "ncaa_game_stats_diff_raw",
+        engine,
+        if_exists = "replace",
+        #if_exists = "append",
+        index = False
+    )
+)
