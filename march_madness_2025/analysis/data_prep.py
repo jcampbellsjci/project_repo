@@ -23,13 +23,13 @@ engine = sqlalchemy.create_engine(db_url)
 
 
 # Loading in data files
-data_file_names = sorted([i for i in os.listdir("data") if not i.startswith(".")])
+data_table_names = sorted(["MRegularSeasonDetailedResults", "MNCAATourneySeeds", "MTeamSpellings", "MNCAATourneyDetailedResults", "MTeams"])
 
 # Going to create a dictionary of raw data frames
 raw_data = {}
-for i in data_file_names:
-    df = pd.read_csv("data/" + i)
-    raw_data[i.split(".")[0]] = df
+for i in data_table_names:
+    df = pd.read_sql(con = engine, sql = "select * from march_madness." + i.lower())
+    raw_data[i] = df
 
 
 #### Season Summaries ####
