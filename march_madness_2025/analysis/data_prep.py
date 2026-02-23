@@ -121,6 +121,8 @@ stat_avg = (
 # Kenpom tracks advanced stats that can be a better measure of performance than general heuristic stats
 # https://kenpom.com/
 
+kp_html = pd.read_csv("data/kp_html.csv")
+
 # We'll scrape data and put it into a df to use as model input
 
 kp_dict = {}
@@ -133,7 +135,7 @@ for url_year in range(2002, 2026):
     if im_blocked_from_kp:
         # Getting kp data from raw data dict
         raw_string = (
-            raw_data['kp_html']
+            kp_html
             .query("Season == @url_year")
             
         )["HTML"].tolist()
