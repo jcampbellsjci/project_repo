@@ -422,6 +422,31 @@ final_df.columns = [
    for i in final_df.columns
 ]
 
+# Merging kenpom data to final df
+final_df = (
+    final_df
+    .merge(
+        kenpom_final_df,
+        how = "left",
+        left_on = ["Season", "TeamATeamID"],
+        right_on = ["Season", "TeamID"]
+    )
+    .drop(columns = "TeamID")
+    .merge(
+        kenpom_final_df,
+        how = "left",
+        left_on = ["Season", "TeamBTeamID"],
+        right_on = ["Season", "TeamID"]
+    )
+    .drop(columns = "TeamID")
+)
+final_df.columns = [
+   "TeamA" + i.replace("_x", "") if i.endswith("_x")
+   else "TeamB" + i.replace("_y", "") if i.endswith("_y")
+   else i
+   for i in final_df.columns
+]
+
 
 # We'll now take our final DF and put it in a postgres db
 # Going to create a game ID field that combines team ID's and seasons as well as a created at ts
@@ -475,7 +500,7 @@ team_a_long = (
     final_df
     .melt(
         id_vars = "GameID",
-        value_vars = ["TeamASeed"] + list(final_df.loc[:, "TeamAGamesPlayed":"TeamAWinRatio"].columns) + list(final_df.loc[:, "TeamAScore":"TeamAOppFTP"].columns),
+        value_vars = ["TeamASeed"] + list(final_df.loc[:, "TeamAGamesPlayed":"TeamAWinRatio"].columns) + list(final_df.loc[:, "TeamAScore":"TeamAOppFTP"].columns) + list(final_df.loc[:, "TeamANetRtg":"TeamANCSOSNetRtg"].columns),
         var_name = "Variable",
         value_name = "AValue"
     )
@@ -486,7 +511,7 @@ team_b_long = (
     final_df
     .melt(
         id_vars = "GameID",
-        value_vars = ["TeamBSeed"] + list(final_df.loc[:, "TeamBGamesPlayed":"TeamBWinRatio"].columns) + list(final_df.loc[:, "TeamBScore":"TeamBOppFTP"].columns),
+        value_vars = ["TeamBSeed"] + list(final_df.loc[:, "TeamBGamesPlayed":"TeamBWinRatio"].columns) + list(final_df.loc[:, "TeamBScore":"TeamBOppFTP"].columns) + list(final_df.loc[:, "TeamBNetRtg":"TeamBNCSOSNetRtg"].columns),
         var_name = "Variable",
         value_name = "BValue"
     )
