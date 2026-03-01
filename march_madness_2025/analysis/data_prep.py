@@ -354,6 +354,36 @@ final_df = (
     .rename(columns = {"Seed_x": "Team1Seed", "Seed_y": "Team2Seed"})
 )
 
+# Joining records to tourney game log
+final_df = (
+    final_df
+    .merge(
+         team_records,
+         on = ["Season", "Team1TeamID"],
+         how = "left"
+    )
+    .rename(columns = {
+        "GamesPlayed": "Team1GamesPlayed",
+        "Wins": "Team1Wins",
+        "Losses": "Team1Losses",
+        "WinRatio": "Team1WinRatio"
+    })
+    .merge(
+         team_records,
+         left_on = ["Season", "Team2TeamID"],
+         right_on = ["Season", "Team1TeamID"],
+         how = "left"
+    )
+    .drop(columns = "Team1TeamID_y")
+    .rename(columns = {
+        "Team1TeamID_x": "Team1TeamID",
+        "GamesPlayed": "Team2GamesPlayed",
+        "Wins": "Team2Wins",
+        "Losses": "Team2Losses",
+        "WinRatio": "Team2WinRatio"
+    })
+)
+
 # Merging season stats for team 1
 final_df = (
     final_df
@@ -367,7 +397,7 @@ final_df = (
 # Team 2 from stats df will become Team A Opponent
 final_df.columns = [
    i.replace("Team1", "TeamA") if i.startswith("Team1")
-   else i.replace("Team2", "TeamB") if i == ("Team2TeamID") or i == ("Team2Seed")
+   else i.replace("Team2", "TeamB") if i in ["Team2TeamID", "Team2Seed", "Team2GamesPlayed", "Team2Wins", "Team2Losses", "Team2WinRatio"]
    else i.replace("Team2", "TeamAOpp") if i.startswith("Team2")
    else i
    for i in final_df.columns
@@ -445,7 +475,7 @@ team_a_long = (
     final_df
     .melt(
         id_vars = "GameID",
-        value_vars = ["TeamASeed"] + list(final_df.loc[:, "TeamAScore":"TeamAOppFTP"].columns),
+        value_vars = ["TeamASeed"] + list(final_df.loc[:, "TeamAGamesPlayed":"TeamAWinRatio"].columns) + list(final_df.loc[:, "TeamAScore":"TeamAOppFTP"].columns),
         var_name = "Variable",
         value_name = "AValue"
     )
@@ -456,7 +486,7 @@ team_b_long = (
     final_df
     .melt(
         id_vars = "GameID",
-        value_vars = ["TeamBSeed"] + list(final_df.loc[:, "TeamBScore":"TeamBOppFTP"].columns),
+        value_vars = ["TeamBSeed"] + list(final_df.loc[:, "TeamBGamesPlayed":"TeamBWinRatio"].columns) + list(final_df.loc[:, "TeamBScore":"TeamBOppFTP"].columns),
         var_name = "Variable",
         value_name = "BValue"
     )
