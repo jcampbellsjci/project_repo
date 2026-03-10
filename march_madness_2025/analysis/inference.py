@@ -1,8 +1,8 @@
-from pandas import to_numeric
 import pandas as pd
 import os
-import numpy as np
 import sqlalchemy
+from xgboost import XGBClassifier
+import numpy as np
 
 
 #### Prep ####
@@ -196,4 +196,101 @@ final_inference_df = (
 final_inference_df = (
     final_inference_df[["GameID", "CreatedAt", "Season", "TeamATeamID", "TeamAName", "TeamBTeamID", "TeamBName"] +
     final_inference_df.columns[3:-4].tolist()]
+    .assign(UsageType = "inference")
+)
+
+(
+    final_inference_df
+    .to_sql(con = engine, name = "ncaa_game_stats_raw", schema = "march_madness",
+        if_exists = "append", index = False
+    )
+)
+
+
+# Taking stats for team A and team b and putting them into long format
+team_a_long = (
+    final_inference_df
+    .melt(
+        id_vars = "GameID",
+        value_vars = ["TeamASeed"] + list(final_inference_df.loc[:, "TeamAGamesPlayed":"TeamAWinRatio"].columns) + list(final_inference_df.loc[:, "TeamAScore":"TeamAOppFTP"].columns) + list(final_inference_df.loc[:, "TeamANetRtg":"TeamANCSOSNetRtg"].columns),
+        var_name = "Variable",
+        value_name = "AValue"
+    )
+    .assign(Variable = lambda x: x["Variable"].str.replace("TeamA", ""))
+)
+
+team_b_long = (
+    final_inference_df
+    .melt(
+        id_vars = "GameID",
+        value_vars = ["TeamBSeed"] + list(final_inference_df.loc[:, "TeamBGamesPlayed":"TeamBWinRatio"].columns) + list(final_inference_df.loc[:, "TeamBScore":"TeamBOppFTP"].columns) + list(final_inference_df.loc[:, "TeamBNetRtg":"TeamBNCSOSNetRtg"].columns),
+        var_name = "Variable",
+        value_name = "BValue"
+    )
+    .assign(Variable = lambda x: x["Variable"].str.replace("TeamB", ""))
+)
+
+# Joining long df's together and pivoting them wide
+long_diff_df = (
+    team_a_long
+    .merge(
+        team_b_long,
+        on = ["GameID", "Variable"],
+        how = "inner"
+    )
+    .assign(DiffValue = lambda x: x["AValue"] - x["BValue"])
+    .pivot(
+        index = "GameID",
+        columns = "Variable",
+        values = "DiffValue"
+    )
+    .reset_index()
+)
+long_diff_df.columns.name = None
+
+# Joining back to ID columns from final df
+final_inference_diff_df = (
+    final_inference_df.loc[:, "GameID":"TeamBName"]
+    .merge(
+        long_diff_df,
+        on = "GameID",
+        how = "inner"
+    )
+    .assign(UsageType = "inference")
+)
+
+# Uploding to postgres
+(
+    final_inference_diff_df
+    .to_sql(con = engine, name = "ncaa_game_stats_diff_raw", schema = "march_madness",
+        if_exists = "append", index = False
+    )
+)
+
+
+#### Making Predictions ####
+
+# Loading model
+xgb_model = XGBClassifier()
+xgb_model.load_model("xgb_model.json")
+
+# Prepping inference data
+predictor_exclusions = ["Wins", "Losses", "FTM", "OppFTM", "FGM", "OppFGM", "FGM3", "OppFGM3", "NetRtg", "SOSDRtg", "SOSORtg","FTA", "OppFTA", "OppTO", "OppStl"]
+id_fields = ["GameID", "CreatedAt", "Season", "TeamATeamID", "TeamAName", "TeamBTeamID", "TeamBName", "UsageType"]
+inference_x = final_inference_diff_df.drop(columns = predictor_exclusions + id_fields)
+
+inference_predictions = xgb_model.predict_proba(inference_x, )[:, 1]
+
+inference_pred = (
+    final_inference_diff_df[["GameID"]]
+    .assign(
+        PredType = "inference",
+        Outcome = np.nan,
+        PredProb = inference_predictions
+    )
+    [["PredType", "GameID", "Outcome", "PredProb"]]
+)
+inference_pred.to_sql(
+    con = engine, name = "predictions", schema = "march_madness",
+    index = False, if_exists = "append"
 )
