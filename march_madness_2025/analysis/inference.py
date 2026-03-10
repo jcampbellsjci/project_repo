@@ -272,7 +272,7 @@ final_inference_diff_df = (
 
 # Loading model
 xgb_model = XGBClassifier()
-xgb_model.load_model("xgb_model.json")
+xgb_model.load_model("models/xgb_model.json")
 
 # Prepping inference data
 predictor_exclusions = ["Wins", "Losses", "FTM", "OppFTM", "FGM", "OppFGM", "FGM3", "OppFGM3", "NetRtg", "SOSDRtg", "SOSORtg","FTA", "OppFTA", "OppTO", "OppStl"]
