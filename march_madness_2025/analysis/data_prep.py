@@ -82,6 +82,10 @@ team_records = (
     .assign(WinRatio = lambda x: x["Wins"] / x["GamesPlayed"])
     .reset_index()
 )
+team_records.to_sql(
+    con = engine, name = "team_records", schema = "march_madness",
+    if_exists = "replace", index = False
+)
 
 
 # We're now going to summarize statistics from teams for a season
@@ -113,6 +117,10 @@ stat_avg = (
         Team2FGP3 = lambda x: x["Team2FGM3"] / x["Team2FGA3"],
         Team2FTP = lambda x: x["Team2FTM"] / x["Team2FTA"]
     )
+)
+stat_avg.to_sql(
+    con = engine, name = "season_averages", schema = "march_madness",
+    if_exists = "replace", index = False
 )
 
 
@@ -274,7 +282,10 @@ kenpom_final_df = (
     .drop(columns = ["Team", "TeamNameSpelling"])
 )
 
-kenpom_final_df.to_sql(con = engine, name = "kenpom_df", schema = "march_madness")
+kenpom_final_df.to_sql(
+    con = engine, name = "kenpom_df", schema = "march_madness",
+    if_exists = "replace", index = False
+)
 
 
 #### Tournament Seeds ####
@@ -283,6 +294,10 @@ kenpom_final_df.to_sql(con = engine, name = "kenpom_df", schema = "march_madness
 tourney_seeds_clean = (
     raw_data['MNCAATourneySeeds']
     .assign(Seed = lambda x: pd.to_numeric(x["Seed"].str.replace(r"[A-Za-z]", "", regex = True)))
+)
+tourney_seeds_clean.to_sql(
+    con = engine, name = "tourney_seeds", schema = "march_madness",
+    if_exists = "replace", index = False
 )
 
 
