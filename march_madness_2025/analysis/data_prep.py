@@ -274,6 +274,8 @@ kenpom_final_df = (
     .drop(columns = ["Team", "TeamNameSpelling"])
 )
 
+kenpom_final_df.to_sql(con = engine, name = "kenpom_df", schema = "march_madness")
+
 
 #### Tournament Seeds ####
 

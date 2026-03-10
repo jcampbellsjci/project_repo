@@ -24,7 +24,7 @@ for i in data_file_names:
     df = pd.read_csv("data/" + i)
     raw_data[i.split(".")[0]] = df
 
-tables_to_upload = ["MRegularSeasonDetailedResults", "MNCAATourneySeeds", "MTeamSpellings", "MNCAATourneyDetailedResults", "MTeams"]
+tables_to_upload = ["MRegularSeasonDetailedResults", "MNCAATourneySeeds", "MTeamSpellings", "MNCAATourneyDetailedResults", "MTeams", "SampleSubmissionStage2"]
 
 for i in tables_to_upload:
     df = raw_data[i]
