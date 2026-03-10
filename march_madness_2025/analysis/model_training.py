@@ -6,6 +6,7 @@ from sklearn.model_selection import train_test_split, cross_val_score, RepeatedK
 from sklearn.metrics import brier_score_loss
 from xgboost import XGBClassifier
 import optuna
+import shap
 
 #### Prep ####
 
@@ -132,17 +133,66 @@ brier_score_loss(y_true = test_y, y_proba = test_predictions)
 
 
 # We'll combine predictions from each set together and store in db
-pred_list = {
+pred_dict = {
     "training": train_df[["GameID", "Outcome"]].assign(PredProb = train_predictions),
     "validation": val_df[["GameID", "Outcome"]].assign(PredProb = val_predictions),
     "testing": test_df[["GameID", "Outcome"]].assign(PredProb = test_predictions)
 }
 pred_df = (
-    pd.concat(pred_list)
+    pd.concat(pred_dict)
     .reset_index(level = 0, names = "PredType")
     .reset_index(drop = True)
 )
 pred_df.to_sql(
     con = engine, name = "predictions", schema = "march_madness",
+    index = False, if_exists = "replace"
+)
+
+
+#### Calculating Shap Values ####
+
+# Creating shap explainer on model object
+explainer = shap.TreeExplainer(xgb_model)
+
+# Making shap values, combining for each dataset and putting into db
+shap_dict = {
+    "training": (
+        pd.DataFrame(explainer.shap_values(train_x), columns = train_x.columns)
+        .assign(GameID = train_df["GameID"].values)
+        .melt(
+            id_vars = "GameID",
+            value_vars = train_x.columns,
+            var_name = "Variable",
+            value_name = "Value"
+        )
+    ),
+     "validation": (
+        pd.DataFrame(explainer.shap_values(val_x), columns = val_x.columns)
+        .assign(GameID = val_df["GameID"].values)
+        .melt(
+            id_vars = "GameID",
+            value_vars = val_x.columns,
+            var_name = "Variable",
+            value_name = "Value"
+        )
+    ),
+    "testing": (
+        pd.DataFrame(explainer.shap_values(test_x), columns = test_x.columns)
+        .assign(GameID = test_df["GameID"].values)
+        .melt(
+            id_vars = "GameID",
+            value_vars = test_x.columns,
+            var_name = "Variable",
+            value_name = "Value"
+        )
+    )
+}
+shap_df = (
+    pd.concat(shap_dict)
+    .reset_index(level = 0, names = "PredType")
+    .reset_index(drop = True)
+)
+shap_df.to_sql(
+    con = engine, name = "shap_values", schema = "march_madness",
     index = False, if_exists = "replace"
 )

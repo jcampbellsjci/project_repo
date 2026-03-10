@@ -3,6 +3,7 @@ import os
 import sqlalchemy
 from xgboost import XGBClassifier
 import numpy as np
+import shap
 
 
 #### Prep ####
@@ -292,5 +293,28 @@ inference_pred = (
 )
 inference_pred.to_sql(
     con = engine, name = "predictions", schema = "march_madness",
+    index = False, if_exists = "append"
+)
+
+
+#### Calculating Shap Values ####
+
+# Creating shap explainer on model object
+explainer = shap.TreeExplainer(xgb_model)
+
+shap_df = (
+    pd.DataFrame(explainer.shap_values(inference_x), columns = inference_x.columns)
+    .assign(GameID = final_inference_diff_df["GameID"].values)
+    .melt(
+        id_vars = "GameID",
+        value_vars = inference_x.columns,
+        var_name = "Variable",
+        value_name = "Value"
+    )
+    .assign(PredType = "inference")
+    [["PredType", "GameID", "Variable", "Value"]]
+)
+shap_df.to_sql(
+    con = engine, name = "shap_values", schema = "march_madness",
     index = False, if_exists = "append"
 )
