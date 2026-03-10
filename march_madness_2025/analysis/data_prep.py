@@ -497,17 +497,14 @@ final_df = (
 final_df = (
     final_df[["GameID", "CreatedAt", "Season", "TeamATeamID", "TeamAName", "TeamBTeamID", "TeamBName"] +
     final_df.columns[3:-4].tolist()]
+    .assign(UsageType = "training")
 )
 
 # Uploding to postgres
 (
     final_df
-    .to_sql(
-        "ncaa_game_stats_raw",
-        engine,
-        if_exists = "replace",
-        #if_exists = "append",
-        index = False
+    .to_sql(con = engine, name = "ncaa_game_stats_raw", schema = "march_madness",
+        if_exists = "replace", index = False
     )
 )
 
@@ -561,16 +558,13 @@ final_diff_df = (
         on = "GameID",
         how = "inner"
     )
+    .assign(UsageType = "training")
 )
 
 # Uploding to postgres
 (
     final_diff_df
-    .to_sql(
-        "ncaa_game_stats_diff_raw",
-        engine,
-        if_exists = "replace",
-        #if_exists = "append",
-        index = False
+    .to_sql(con = engine, name = "ncaa_game_stats_diff_raw", schema = "march_madness",
+        if_exists = "replace", index = False
     )
 )
