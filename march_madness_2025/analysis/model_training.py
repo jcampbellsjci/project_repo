@@ -23,14 +23,14 @@ db_url = sqlalchemy.engine.URL.create(
 engine = sqlalchemy.create_engine(db_url)
 
 diff_df = pd.read_sql(
-    con = engine, sql = "select * from ncaa_game_stats_diff_raw"
+    con = engine, sql = """select * from march_madness.ncaa_game_stats_diff_raw where "UsageType" = 'training'"""
 )
 
 
 #### Preprocessing ####
 
 # Want to split df into training, validation, and testing set
-# We'll use most recent year as a testing set
+# We'll use most recent year (with outcomes) as a testing set
 season_filter = 2024
 test_df = (
     diff_df
@@ -76,7 +76,7 @@ predictor_exclusions = [
 corr_df.query("index not in @predictor_exclusions and Variable not in @predictor_exclusions").head(20)
 
 # Getting id fields to exclude from training
-id_fields = ["GameID", "CreatedAt", "Season", "TeamATeamID", "TeamAName", "TeamBTeamID", "TeamBName"]
+id_fields = ["GameID", "CreatedAt", "Season", "TeamATeamID", "TeamAName", "TeamBTeamID", "TeamBName", "UsageType"]
 
 train_x = train_df.drop(columns = ["Outcome"] + predictor_exclusions + id_fields)
 train_y = train_df["Outcome"]
@@ -120,7 +120,7 @@ study.optimize(objective, n_trials = 50, show_progress_bar = True)
 # Training model on best params from optuna
 xgb_model = XGBClassifier(**study.best_params)
 xgb_model.fit(train_x, train_y)
-xgb_model.save_model("xgb_model.json")
+xgb_model.save_model("models/xgb_model.json")
 
 # Creating predictions and calculating brier score
 train_predictions = xgb_model.predict_proba(train_x, )[:, 1]
@@ -133,9 +133,9 @@ brier_score_loss(y_true = test_y, y_proba = test_predictions)
 
 # We'll combine predictions from each set together and store in db
 pred_list = {
-    "train": train_df[["GameID", "Outcome"]].assign(PredProb = train_predictions),
-    "val": val_df[["GameID", "Outcome"]].assign(PredProb = val_predictions),
-    "test": test_df[["GameID", "Outcome"]].assign(PredProb = test_predictions)
+    "training": train_df[["GameID", "Outcome"]].assign(PredProb = train_predictions),
+    "validation": val_df[["GameID", "Outcome"]].assign(PredProb = val_predictions),
+    "testing": test_df[["GameID", "Outcome"]].assign(PredProb = test_predictions)
 }
 pred_df = (
     pd.concat(pred_list)
