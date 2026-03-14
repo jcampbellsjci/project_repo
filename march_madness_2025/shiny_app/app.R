@@ -56,30 +56,34 @@ diff_stat_df <- diff_stat_df %>%
 prediction_df <- prediction_df %>%
   bind_rows(
     prediction_df %>%
+      separate_wider_delim(
+        cols = GameID,
+        delim = "-",
+        names = c("Season", "IDA", "IDB")
+      ) %>%
       mutate(
         Outcome = as.integer(ifelse(Outcome == 1, 0, 1)),
-        GameID = str_c(
-          str_split_fixed(GameID, pattern = "-", n = 3)[1],
-          str_split_fixed(GameID, pattern = "-", n = 3)[3],
-          str_split_fixed(GameID, pattern = "-", n = 3)[2]
-        ),
+        GameID = str_c(Season, IDB, IDA, sep = "-"),
         PredProb = 1 - PredProb
-      )
+      ) %>%
+      select(-c(Season, IDA, IDB))
   )
 shap_df <- shap_df %>%
   bind_rows(
     shap_df %>%
+      separate_wider_delim(
+        cols = GameID,
+        delim = "-",
+        names = c("Season", "IDA", "IDB")
+      ) %>%
       mutate(
-        GameID = str_c(
-          str_split_fixed(GameID, pattern = "-", n = 3)[1],
-          str_split_fixed(GameID, pattern = "-", n = 3)[3],
-          str_split_fixed(GameID, pattern = "-", n = 3)[2]
-        ),
+        GameID = str_c(Season, IDB, IDA, sep = "-"),
         Value = Value * -1
-      )
+      ) %>%
+      select(-c(Season, IDA, IDB))
   )
 
-# Define UI for app that draws a histogram ----
+
 ui <- fluidPage(
   titlePanel("NCAA Tournament Analysis"),
 
@@ -269,6 +273,12 @@ server <- function(input, output, session) {
               TeamBNameSeed == input$team_b_select
           ) %>%
           arrange(desc(abs(ShapValue))) %>%
+          mutate(
+            DiffPercOverall = str_c(round(100 * DiffPercOverall, 2), "%"),
+            DiffPercSeed = str_c(round(100 * DiffPercSeed, 2), "%"),
+            ShapPercOverall = str_c(round(100 * ShapPercOverall, 2), "%"),
+            ShapPercSeed = str_c(round(100 * ShapPercSeed, 2), "%")
+          ) %>%
           select(
             Variable,
             DiffValue,
@@ -278,18 +288,17 @@ server <- function(input, output, session) {
             ShapPercOverall,
             ShapPercSeed
           ),
-        options = list(dom = "t")
+        options = list(
+          dom = "tp",
+          columnDefs = list(list(className = "dt-left", targets = "_all"))
+        )
       ) %>%
         formatRound(
           columns = c(
             "DiffValue",
-            "DiffPercOverall",
-            "DiffPercSeed",
-            "ShapValue",
-            "ShapPercOverall",
-            "ShapPercSeed"
+            "ShapValue"
           ),
-          digits = 4
+          digits = 2
         )
     },
   )
