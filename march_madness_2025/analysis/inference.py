@@ -276,7 +276,7 @@ xgb_model = XGBClassifier()
 xgb_model.load_model("models/xgb_model.json")
 
 # Prepping inference data
-predictor_exclusions = ["Wins", "Losses", "FTM", "OppFTM", "FGM", "OppFGM", "FGM3", "OppFGM3", "NetRtg", "SOSDRtg", "SOSORtg","FTA", "OppFTA", "OppTO", "OppStl"]
+predictor_exclusions = ["Wins", "Losses", "FTM", "OppFTM", "FGM", "OppFGM", "FGM3", "OppFGM3", "NetRtg", "SOSDRtg", "SOSORtg","FTA", "OppFTA", "OppTO", "OppStl", "Seed"]
 id_fields = ["GameID", "CreatedAt", "Season", "TeamATeamID", "TeamAName", "TeamBTeamID", "TeamBName", "UsageType"]
 inference_x = final_inference_diff_df.drop(columns = predictor_exclusions + id_fields)
 
@@ -300,7 +300,12 @@ inference_pred.to_sql(
 #### Calculating Shap Values ####
 
 # Creating shap explainer on model object
-explainer = shap.TreeExplainer(xgb_model)
+train_x = pd.read_sql(con = engine, sql = "select * from march_madness.train_x")
+explainer = shap.TreeExplainer(
+    xgb_model, model_output = "probability",
+    data = train_x,
+    feature_perturbation = "interventional"
+)
 
 shap_df = (
     pd.DataFrame(explainer.shap_values(inference_x), columns = inference_x.columns)

@@ -72,7 +72,8 @@ predictor_exclusions = [
     # Removing fields that are just combos of other fields
     "NetRtg", "SOSDRtg", "SOSORtg",
     # Removing cause and effect fields
-    "FTA", "OppFTA", "OppTO", "OppStl" 
+    "FTA", "OppFTA", "OppTO", "OppStl",
+    "Seed"
 ]
 corr_df.query("index not in @predictor_exclusions and Variable not in @predictor_exclusions").head(20)
 
@@ -152,7 +153,11 @@ pred_df.to_sql(
 #### Calculating Shap Values ####
 
 # Creating shap explainer on model object
-explainer = shap.TreeExplainer(xgb_model)
+explainer = shap.TreeExplainer(
+    xgb_model, model_output = "probability",
+    data = train_x,
+    feature_perturbation = "interventional"
+)
 
 # Making shap values, combining for each dataset and putting into db
 shap_dict = {
@@ -194,5 +199,11 @@ shap_df = (
 )
 shap_df.to_sql(
     con = engine, name = "shap_values", schema = "march_madness",
+    index = False, if_exists = "replace"
+)
+
+# Writing training df to sql to be used in inference job
+train_x.to_sql(
+    con = engine, name = "train_x", schema = "march_madness",
     index = False, if_exists = "replace"
 )
