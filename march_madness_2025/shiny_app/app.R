@@ -90,6 +90,7 @@ ui <- fluidPage(
   fluidRow(
     column(
       width = 2,
+      style = "margin-top: 12.5px",
       selectInput(
         inputId = "season_select",
         label = "Season",
@@ -108,7 +109,7 @@ ui <- fluidPage(
     ),
     column(
       width = 2,
-      style = "padding-left: 40px",
+      style = "padding-left: 40px; margin-top: 12.5px",
       tags$div(
         tags$label("Outcome"),
         textOutput(outputId = "outcome"),
@@ -276,6 +277,7 @@ server <- function(input, output, session) {
           mutate(
             DiffPercOverall = str_c(round(100 * DiffPercOverall, 2), "%"),
             DiffPercSeed = str_c(round(100 * DiffPercSeed, 2), "%"),
+            ShapValue = str_c(round(100 * ShapValue, 2), "%"),
             ShapPercOverall = str_c(round(100 * ShapPercOverall, 2), "%"),
             ShapPercSeed = str_c(round(100 * ShapPercSeed, 2), "%")
           ) %>%
@@ -290,13 +292,13 @@ server <- function(input, output, session) {
           ),
         options = list(
           dom = "tp",
-          columnDefs = list(list(className = "dt-left", targets = "_all"))
+          columnDefs = list(list(className = "dt-left", targets = "_all")),
+          pageLength = 5
         )
       ) %>%
         formatRound(
           columns = c(
-            "DiffValue",
-            "ShapValue"
+            "DiffValue"
           ),
           digits = 2
         )
