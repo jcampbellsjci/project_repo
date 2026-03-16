@@ -3,7 +3,6 @@ import os
 import pandas as pd
 import sqlalchemy
 from sklearn.model_selection import train_test_split, cross_val_score, RepeatedKFold
-from sklearn.metrics import brier_score_loss
 from xgboost import XGBClassifier
 import optuna
 import shap
@@ -32,7 +31,7 @@ diff_df = pd.read_sql(
 
 # Want to split df into training, validation, and testing set
 # We'll use most recent year (with outcomes) as a testing set
-season_filter = 2024
+season_filter = 2025
 test_df = (
     diff_df
     .query("Season == @season_filter")

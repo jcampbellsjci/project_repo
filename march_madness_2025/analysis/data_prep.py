@@ -139,7 +139,7 @@ kp_dict = {}
 # I've been getting blocked from KP, so I set up a manual html csv we can pull from and clean up
 im_blocked_from_kp = True
 
-for url_year in range(2002, 2026):
+for url_year in range(2002, 2027):
     if im_blocked_from_kp:
         # Getting kp data from raw data dict
         raw_string = (

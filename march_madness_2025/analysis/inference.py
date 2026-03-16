@@ -21,7 +21,7 @@ db_url = sqlalchemy.engine.URL.create(
 )
 engine = sqlalchemy.create_engine(db_url)
 
-season = 2025
+season = 2026
 
 team_records = pd.read_sql(con = engine, sql = f'select * from march_madness.team_records where "Season" = {season}')
 stat_avg = pd.read_sql(con = engine, sql = f'select * from march_madness.season_averages where "Season" = {season}')
