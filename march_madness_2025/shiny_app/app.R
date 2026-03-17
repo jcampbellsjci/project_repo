@@ -2,6 +2,7 @@ library(shiny)
 library(DBI)
 library(RPostgres)
 library(DT)
+library(plotly)
 library(tidyverse)
 
 con <- dbConnect(
@@ -133,6 +134,21 @@ ui <- fluidPage(
     column(
       width = 6,
       DTOutput(outputId = "stat_table", width = "100%")
+    )
+  ),
+
+  fluidRow(
+    column(
+      width = 4,
+      plotlyOutput(outputId = "accuracy_plot")
+    ),
+    column(
+      width = 4,
+      plotlyOutput(outputId = "pred_plot")
+    ),
+    column(
+      width = 4,
+      plotlyOutput(outputId = "shap_plot")
     )
   )
 )
@@ -290,6 +306,7 @@ server <- function(input, output, session) {
             ShapPercOverall,
             ShapPercSeed
           ),
+        selection = "single",
         options = list(
           dom = "tp",
           columnDefs = list(list(className = "dt-left", targets = "_all")),
@@ -303,6 +320,199 @@ server <- function(input, output, session) {
           digits = 2
         )
     },
+  )
+
+  observeEvent(
+    {
+      input$season_select
+      input$team_a_select
+      input$team_b_select
+    },
+    {
+      selectRows(dataTableProxy("stat_table"), 1)
+    }
+  )
+
+  selected_variable <- reactive({
+    req(input$stat_table_rows_selected)
+
+    transformed_df %>%
+      filter(
+        Season == input$season_select,
+        TeamANameSeed == input$team_a_select,
+        TeamBNameSeed == input$team_b_select
+      ) %>%
+      arrange(desc(abs(ShapValue))) %>%
+      slice(input$stat_table_rows_selected) %>%
+      pull(Variable)
+  })
+
+  output$accuracy_plot <- renderPlotly(
+    {
+      p <- transformed_df %>%
+        filter(
+          TeamASeed == as.integer(str_extract(input$team_a_select, "\\d+")) &
+            TeamBSeed == as.integer(str_extract(input$team_b_select, "\\d+"))
+        ) %>%
+        distinct(GameID, .keep_all = T) %>%
+        filter(!is.na(Outcome)) %>%
+        mutate(ProbBin = ntile(PredProb, 5)) %>%
+        group_by(ProbBin, Outcome) %>%
+        summarise(n = n()) %>%
+        group_by(ProbBin) %>%
+        mutate(
+          total = sum(n),
+          pct = n / sum(n)
+        ) %>%
+        ggplot(
+          aes(
+            x = ProbBin,
+            y = n,
+            fill = factor(Outcome),
+            text = str_c(
+              "Outcome: ",
+              Outcome,
+              "<br>Count: ",
+              n,
+              "<br>Bin total: ",
+              total,
+              "<br>Win rate: ",
+              str_c(round(100 * pct, 2), "%")
+            )
+          )
+        ) +
+        geom_col() +
+        geom_text(
+          data = ~ filter(.x, Outcome == 1),
+          aes(label = str_c(round(100 * pct, 2), "%")),
+          position = position_stack(vjust = 0.5),
+          size = 3
+        ) +
+        scale_fill_manual(values = c("0" = "#ff6b6b", "1" = "#4ecdc4")) +
+        labs(
+          title = "Win rate by prediction bucket",
+          fill = "Outcome"
+        )
+
+      plt <- ggplotly(p, tooltip = c("text"))
+
+      for (i in seq_along(plt$x$data)) {
+        type <- plt$x$data[[i]]$type
+
+        if (type == "bar") {
+          plt$x$data[[i]]$hovertemplate <- "%{text}<extra></extra>"
+        } else {
+          plt$x$data[[i]]$hoverinfo <- "none"
+        }
+      }
+
+      plt %>%
+        layout(
+          hoverlabel = list(align = "left"),
+          legend = list(
+            orientation = "h",
+            x = 0.5,
+            y = -0.2,
+            xanchor = "center"
+          )
+        )
+    }
+  )
+
+  output$pred_plot <- renderPlotly(
+    {
+      p <- transformed_df %>%
+        filter(
+          TeamASeed == as.integer(str_extract(input$team_a_select, "\\d+")) &
+            TeamBSeed == as.integer(str_extract(input$team_b_select, "\\d+"))
+        ) %>%
+        distinct(GameID, .keep_all = T) %>%
+        ggplot(aes(x = PredProb)) +
+        geom_density() +
+        geom_jitter(
+          aes(
+            x = PredProb,
+            y = 0,
+            fill = factor(Outcome),
+            text = str_c(
+              "Season: ",
+              Season,
+              "<br>Team: ",
+              TeamANameSeed,
+              "<br>Opponent: ",
+              TeamBNameSeed,
+              "<br>Predicted probability: ",
+              str_c(round(100 * PredProb, 2), "%")
+            )
+          ),
+          size = 2.5,
+          alpha = .7
+        ) +
+        labs(
+          title = "Prediction distribution",
+          fill = "Outcome"
+        )
+
+      ggplotly(p, tooltip = c("text")) %>%
+        style(hoverinfo = "none", traces = 1) %>%
+        layout(
+          hoverlabel = list(align = "left"),
+          legend = list(
+            orientation = "h",
+            x = 0.5,
+            y = -0.2,
+            xanchor = "center"
+          )
+        )
+    }
+  )
+
+  output$shap_plot <- renderPlotly(
+    {
+      req(selected_variable())
+
+      p <- transformed_df %>%
+        filter(
+          TeamASeed == as.integer(str_extract(input$team_a_select, "\\d+")) &
+            TeamBSeed == as.integer(str_extract(input$team_b_select, "\\d+"))
+        ) %>%
+        filter(Variable == selected_variable()) %>%
+        ggplot(
+          aes(
+            x = ShapValue,
+            y = DiffValue,
+            fill = factor(Outcome),
+            text = str_c(
+              "Season: ",
+              Season,
+              "<br>Team: ",
+              TeamANameSeed,
+              "<br>Opponent: ",
+              TeamBNameSeed,
+              "<br>Predicted probability: ",
+              str_c(round(100 * PredProb, 2), "%"),
+              "<br>Shap value: ",
+              str_c(round(100 * ShapValue, 2), "%")
+            )
+          )
+        ) +
+        geom_point(pch = 21, alpha = .7, size = 2.5) +
+        labs(
+          title = str_c("Shap value distribution: ", selected_variable()),
+          fill = "Outcome"
+        )
+
+      ggplotly(p, tooltip = c("text")) %>%
+        layout(
+          hoverlabel = list(align = "left"),
+          legend = list(
+            orientation = "h",
+            x = 0.5,
+            y = -0.2,
+            xanchor = "center"
+          )
+        )
+    }
   )
 }
 
